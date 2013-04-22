@@ -33,4 +33,5 @@ class FEConstant(FetchConstant):
     
     DOWNLOAD_DELAY = u'DOWNLOAD_DELAY'
     
+    sellerinfo = u'customer_info'
     

@@ -3,14 +3,15 @@
 Created on 2013-3-31
 @author: Administrator
 '''
+from bot.config import configdata
 from bot.configutil import ConfigFile
 from crawler.shc.fe.const import FEConstant as const
 from multiprocessing import Lock
+from multiprocessing.process import Process
 from scrapy.cmdline import execute
 from scrapy.settings import CrawlerSettings
 import datetime
 import os
-from multiprocessing.process import Process
 import time
 
 lock = Lock()
@@ -147,8 +148,6 @@ if __name__ == '__main__':
 #    root_scheduler.run()
     
     
-    cfg_file = r'E:\corleone\corleone_GitHub\crawl_secondhandcar\fetch58.cfg'
-    configdata = ConfigFile.readconfig(cfg_file).data
     prepare_proxies(configdata)
     start_time = datetime.datetime.now()
     current_city = configdata[const.FE_CONFIG][const.FE_CONFIG_CITIES].split(u',')[0]

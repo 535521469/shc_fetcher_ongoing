@@ -13,6 +13,7 @@ import collections
 import datetime
 import os
 import time
+from bot.config import configdata
 
 lock = Lock()
 
@@ -97,14 +98,8 @@ class SpiderProcess(Process):
 
 spider_process_mapping = {}
 
-def read_config():
-    cfg_path = os.sep.join([os.getcwd(), r'./fetch58.cfg'])
-    configdata = ConfigFile.readconfig(cfg_path).data
-    return configdata 
-
 def add_task(root_scheduler):
     
-    configdata = read_config()
     
 #    if configdata[const.PROXY_CONFIG][const.PROXY_CONFIG_SOURCE_TYPE] != u'1':
 #        assert 0, u'call corleone to extend the situation'
@@ -212,11 +207,11 @@ if __name__ == '__main__':
 #    root_scheduler = scheduler(time.time, time.sleep)
 #    root_scheduler.enter(0, 0, add_task, (root_scheduler,))
 #    root_scheduler.run()
-    
-    configdata = read_config()
-    prepare_proxies(configdata)
-    
-    root_scheduler = scheduler(time.time, time.sleep)
-    root_scheduler.enter(0, 0, add_task, (root_scheduler,))
-    root_scheduler.run()
+    while 1:
+        
+        prepare_proxies(configdata)
+        
+        root_scheduler = scheduler(time.time, time.sleep)
+        root_scheduler.enter(0, 0, add_task, (root_scheduler,))
+        root_scheduler.run()
 

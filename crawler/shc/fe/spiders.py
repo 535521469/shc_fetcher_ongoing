@@ -6,7 +6,8 @@ Created on 2013-3-31
 from crawler.shc.fe.const import FEConstant as const
 from crawler.shc.fe.item import SHCFEShopInfo, SHCFEShopInfoConstant as voconst
 from crawler.shc.fe.tools import ignore_notice, check_verification_code, \
-    check_verification_code_gif, with_ip_proxy, check_blank_page
+    check_verification_code_gif, with_ip_proxy, check_blank_page, \
+    check_detail_duplicate, save_detail
 from scrapy import log
 from scrapy.http.request import Request
 from scrapy.selector import HtmlXPathSelector
@@ -174,7 +175,8 @@ class FESpider(BaseSpider):
     def in_time_period(self, dt, cookies):
         start_date = cookies[const.STARTDATE]
         end_date = cookies[const.ENDDATE]
-        return start_date <= dt <= end_date
+#        return start_date <= dt <= end_date
+        return 1
     
     def build_file_dir(self, cookies):
         file_dir = os.sep.join([cookies[const.OUTPUT_DIR],
@@ -320,7 +322,6 @@ class SHCSpider(FESpider):
         yield req
     
     @check_blank_page
-    @with_ip_proxy
     def parse(self, response):
         cookies = response.request.cookies
         city_name = self.get_current_city(cookies)
@@ -336,7 +337,6 @@ class SHCSpider(FESpider):
                 yield Request(city_url + tmp_url, CarListSpider().parse,
                               dont_filter=True,
                               cookies=cookies
-                              
                               )
                 break
         else:
@@ -345,12 +345,14 @@ class SHCSpider(FESpider):
         
 class CarListSpider(FESpider):
     
-    DOWNLOAD_DELAY = 1
+    DOWNLOAD_DELAY = 20
     
-    @check_blank_page
-    @with_ip_proxy
-    @check_verification_code
-    @ignore_notice
+#    @check_blank_page
+#    @with_ip_proxy
+#    @check_verification_code
+#    @ignore_notice
+
+    @check_detail_duplicate
     def parse(self, response):
         hxs = HtmlXPathSelector(response)
         
@@ -394,44 +396,32 @@ class CarListSpider(FESpider):
             if len(td_tags) == 1:
                 continue
             
-            declare_date = None
-
             url = tr_tag.select('td[1]/a/@href').extract()[0]
-            
-            try:
-                declare_date = tr_tag.select('//span[@class="c_999"]/text()').extract()[0]
-            except IndexError:
-                pass
-            
-            url_title = tr_tag.select('td[1]/a/text()').extract()[0]
-            
-            if declare_date:
-                declare_date_str = u'%s-%s' % (cookies[const.START_TIME][:4]
-                                               , declare_date)
-                try:
-                    declare_date = strptime(declare_date_str, '%Y-%m-%d').date()
-                    
-                    if not self.in_time_period(declare_date, cookies):
-                        msg = (u"ignore for out of time %s,%s,%s in "
-                               "%s ") % (current_city, declare_date_str
-                                         , url, response.url)
-                               
-                        self.log(msg, log.INFO)
-                        continue 
-                except ValueError:
-                    #===========================================================
-                    # not standar datetime format
-                    #===========================================================
-                    self.log(u'%s ' % declare_date_str, log.DEBUG)
-            
-            
-#            break
-#            yield Request(u'http://bj.58.com/ershouche/13314602457610x.shtml',
-#                          CarDetailSpider().parse
-#                          , cookies=cookies
-#                          )
-#            break
-
+            #===================================================================
+            # declare_date = None
+            # try:
+            #    declare_date = tr_tag.select('//span[@class="c_999"]/text()').extract()[0]
+            # except IndexError:
+            #    pass
+            # url_title = tr_tag.select('td[1]/a/text()').extract()[0]
+            # if declare_date:
+            #    declare_date_str = u'%s-%s' % (cookies[const.START_TIME][:4]
+            #                                   , declare_date)
+            #    try:
+            #        declare_date = strptime(declare_date_str, '%Y-%m-%d').date()
+            #        
+            #        if not self.in_time_period(declare_date, cookies):
+            #            msg = (u"ignore for out of time %s,%s,%s in "
+            #                   "%s ") % (current_city, declare_date_str
+            #                             , url, response.url)
+            #            self.log(msg, log.INFO)
+            #            continue 
+            #    except ValueError:
+            #        #===========================================================
+            #        # not standar datetime format
+            #        #===========================================================
+            #        self.log(u'%s ' % declare_date_str, log.DEBUG)
+            #===================================================================
             
             url_len = url_len + 1
             self.log((u'add detail page in list page %s '
@@ -441,7 +431,6 @@ class CarListSpider(FESpider):
                           dont_filter=True,
                           cookies=cookies,
                           )
-#            yield Request('http://wh.58.com/ershouche/13544398611331x.shtml', CarDetailSpider().parse, cookies=cookies)
         else:
             self.log((u'%s list page No %s , total add detail page '
                       '%s') % (self.get_current_city(cookies),
@@ -477,17 +466,21 @@ class CarListSpider(FESpider):
                 
 class CarDetailSpider(FESpider):
     
-    @check_blank_page
-    @with_ip_proxy
-    @check_verification_code
-    @ignore_notice
+    DOWNLOAD_DELAY = 5
+    
+#    @check_blank_page
+#    @with_ip_proxy
+#    @check_verification_code
+#    @ignore_notice
+
+    @save_detail
     def parse(self, response):
         '''
         parse 
         '''
         info = SHCFEShopInfo()
         cookies = dict(response.request.cookies)
-        cookies[u'customer_info'] = info
+        cookies[const.sellerinfo] = info
         
         hxs = HtmlXPathSelector(response)
         xps = '//div[@class="breadCrumb f12"]/span/a[1]/text()'
@@ -608,7 +601,7 @@ class CarDetailSpider(FESpider):
                 picture_name = picture_name[:picture_name.index(u'.')]
                 info[voconst.contacter_phone_picture_name] = picture_name + u".jpg"
                 
-                cookies[u'customer_info'] = info
+                cookies[const.sellerinfo] = info
             except Exception as e:
                 self.log((u" something wrong %s " % (response.url,)),
                                 log.CRITICAL)
@@ -658,7 +651,7 @@ class PersonPhoneSpider(FESpider):
     @check_verification_code_gif
     def parse(self, response):
         cookies = response.request.cookies
-        info = cookies[u'customer_info']
+        info = cookies[const.sellerinfo]
         
         filename = info[voconst.contacter_phone_picture_name]
         
@@ -695,7 +688,7 @@ class CustomerShopSpider(FESpider):
                                                           custom_url,),
                      log.DEBUG)
         
-        info = dict(cookies[u'customer_info'])
+        info = dict(cookies[const.sellerinfo])
         
         try:
             shop_name = hxs.select('//div[@class="bi_tit"]/text()').extract()[0]
@@ -735,7 +728,7 @@ class CustomerShopSpider(FESpider):
                     info[voconst.enter_time] = tr_tag.select('td[1]/text()').extract()[0].strip()
                     break
 
-        cookies[u'customer_info'] = info
+        cookies[const.sellerinfo] = info
         yield Request(response.request.cookies[voconst.contacter_phone_url],
                       PersonPhoneSpider().parse,
                       dont_filter=True,

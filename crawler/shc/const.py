@@ -2,12 +2,20 @@
 Created on 2013-3-31
 @author: Administrator
 '''
+from bot.const import FetchConst
 
-class FetchConstant(object):
+class FetchConstant(FetchConst):
+    
+    DBConfig = u'db'
+    DBConfig_dbname = u'dbname'
+    DBConfig_port = u'port'
+    DBConfig_user = u'user'
+    DBConfig_passwd = u'passwd'
+    DBConfig_host = u'host'
+    DBConfig_charactset = u'charactset'
 
     OUTPUT_DIR = u"op_dir"
     START_TIME = u'starttime' # relate to file dir and file name
-    
     
     LOG_FILE = u"LOG_FILE"
     LOG_CONFIG = u'log'
