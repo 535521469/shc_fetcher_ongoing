@@ -1,15 +1,13 @@
 BOT_NAME = 'SHCSpider'
-#SPIDER_MODULES = ['crawler.shc.fe.spiders_picture']
-SPIDER_MODULES = ['crawler.shc.fe.spiders']
-LOG_LEVEL = 'INFO'
+SPIDER_MODULES = ['crawler.shc.fe.spiders', ]
 
-DOWNLOAD_DELAY = 0
+LOG_LEVEL = 'DEBUG'
 
 LOG_ENCODING = u'UTF-8'
 
 #RETRY_TIMES = 10
-DOWNLOADER_MIDDLEWARES = {'crawler.shc.fe.middlewares.ProxyRetryMiddleWare':450,
-                          'scrapy.contrib.downloadermiddleware.retry.RetryMiddleware':None
-                           }
+#DOWNLOADER_MIDDLEWARES = {'crawler.shc.fe.middlewares.ProxyRetryMiddleWare':450,
+#                          'scrapy.contrib.downloadermiddleware.retry.RetryMiddleware':None
+#                           }
 
 

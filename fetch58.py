@@ -4,43 +4,25 @@ Created on 2013-3-20
 @author: corleone
 '''
 from crawler.shc.fe.const import FEConstant as const
-from multiprocessing import Process, Lock
+from multiprocessing import Process
 from sched import scheduler
 from scrapy.cmdline import execute
 from scrapy.settings import CrawlerSettings
 import collections
 import datetime
-import os
 import time
 from bot.config import configdata
 
-lock = Lock()
-
 class SpiderProcess(Process):
     
-    def __init__(self, starttime, city_name, configdata):
+    def __init__(self, city_name, configdata):
         Process.__init__(self)
-        self._starttime = starttime
-        self.starttime = starttime.strftime('%Y%m%d%H%M%S')
         self.city_name = city_name
         self.configdata = dict(configdata)
         self.configdata[const.CURRENT_CITY] = city_name
     
-    def unite_proxy(self, configdata):
-        proxy_source_type_code = configdata[const.PROXY_CONFIG].get(const.PROXY_CONFIG_SOURCE_TYPE)
-        if proxy_source_type_code == u'2':
-            with open(u'enable_proxies.txt', u'r') as f:
-                proxies = f.readlines()
-            configdata[const.PROXY_CONFIG][const.PROXY_CONFIG_IPPROXIES] = u','.join(proxies)
-            configdata[const.PROXY_CONFIG][const.PROXY_CONFIG_SOURCE_TYPE] = u'1'
-            
-        return configdata 
-    
-    def build_values(self):
+    def run(self):
         feconfig = self.configdata[const.FE_CONFIG]
-        
-        self.configdata = self.unite_proxy(self.configdata)
-        
         try:
         #=======================================================================
         # if the city use the default config
@@ -49,46 +31,17 @@ class SpiderProcess(Process):
         except Exception:
             city_config = {}
         
-        output_dir = self.configdata[const.LOG_CONFIG].get(const.LOG_CONFIG_OUTPUT_DIR)
-        
-        start_date = eval(feconfig[const.DEFAULT_START_DATE]).strftime(u'%Y-%m-%d')
-        end_date = eval(feconfig[const.DEFAULT_END_DATE]).strftime(u'%Y-%m-%d')
-        
         start_page = city_config.get(const.START_PAGE,
-                                     feconfig[const.DEFAULT_START_PAGE])
+                             feconfig[const.DEFAULT_START_PAGE])
         end_page = city_config.get(const.END_PAGE,
                                    feconfig[const.DEFAULT_END_PAGE])
         
-        output_dir = os.sep.join([output_dir, self.starttime , ])
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
+        values = {
+                  const.CONFIG_DATA:self.configdata,
+                  const.START_PAGE:int(start_page),
+                  const.END_PAGE:int(end_page),
+                  }
         
-        values = {const.START_TIME:self.starttime[:-2]
-                  , const.CITY_NAME:self.city_name
-                  , const.CURRENT_CITY:self.city_name
-                  , const.CUSTOMER_FLAG:feconfig.get(const.CUSTOMER_FLAG, 1)
-                  , const.OUTPUT_DIR:output_dir
-                  , const.STARTDATE:city_config.get(const.STARTDATE, start_date)
-                  , const.ENDDATE:city_config.get(const.ENDDATE, end_date)
-                  , const.CONFIG_DATA:self.configdata
-                  , const.START_PAGE:int(start_page)
-                  , const.END_PAGE:int(end_page)
-                  , const.LOCK:lock
-                  , const.DOWNLOAD_DELAY:feconfig.get(const.DOWNLOAD_DELAY, 1)
-                  , }
-        
-        console_flag = self.configdata[const.LOG_CONFIG].get(const.LOG_CONSOLE_FLAG)
-        if console_flag != u'1':
-            values[const.LOG_FILE] = os.sep.join([output_dir, self.starttime + u'.log' ])
-        
-        return values
-    
-    def run(self):
-        try:
-            
-            values = self.build_values()
-        except Exception as e:
-            raise e
         settings = u'crawler.shc.fe.settings'
         module_import = __import__(settings, {}, {}, [''])
         settings = CrawlerSettings(module_import, values=values)
@@ -98,34 +51,23 @@ spider_process_mapping = {}
 
 def add_task(root_scheduler):
     
-    
-#    if configdata[const.PROXY_CONFIG][const.PROXY_CONFIG_SOURCE_TYPE] != u'1':
-#        assert 0, u'call corleone to extend the situation'
-    
     city_names = configdata[const.FE_CONFIG][const.FE_CONFIG_CITIES].split(u',')
     processes = collections.deque()
     
-    starttime = datetime.datetime.now()
-    
     for city_name in city_names :
-        p = SpiderProcess(starttime, city_name, configdata)
-#        p.daemon=False
+        p = SpiderProcess(city_name, configdata)
         spider_process_mapping[city_name] = p
         processes.append(p)
         
     if len(processes):
-#        root_scheduler.enter(0, 1, processes.popleft().start, ())
         root_scheduler.enter(1, 1, check_add_process,
                              (spider_process_mapping, processes,
                               root_scheduler, configdata))
             
-            
 def check_add_process(spider_process_mapping, processes,
                       root_scheduler, configdata):
     
-#    alives = filter(lambda x:x , [p.is_alive() for p in spider_process_mapping.values()])
     alives = filter(Process.is_alive, spider_process_mapping.values())
-#    print len(alives)
     
     if len(processes):
         pool_size = int(configdata[const.FE_CONFIG].get(const.MULTI, 1))
@@ -169,17 +111,14 @@ def valid_proxy():
               }
     settings = CrawlerSettings(module_, values=values)
     execute(argv=["scrapy", "crawl", "BaiDuHomePageSpider" ], settings=settings)
-    
 
 def prepare_proxies(configdata):
     
     if configdata[const.PROXY_CONFIG].get(const.PROXY_CONFIG_SOURCE_TYPE, u'1') != u'2':
         return 
-    
     p = Process(group=None, target=fetch_proxy,)
     p.start()
     p.join()
-    
     print u'%s get %d free proxy' % (datetime.datetime.now(),
                                    len(open(u'proxy.txt', u'r').readlines()))
     
@@ -207,7 +146,7 @@ if __name__ == '__main__':
 #    root_scheduler.run()
     while 1:
         
-        prepare_proxies(configdata)
+#        prepare_proxies(configdata)
         
         root_scheduler = scheduler(time.time, time.sleep)
         root_scheduler.enter(0, 0, add_task, (root_scheduler,))

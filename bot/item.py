@@ -37,13 +37,14 @@ class CarInfo(Base):
     displacement = Column("Displacement", String,)
     gearbox = Column("Gearbox", String,)
     licenseddate = Column("LicenseDate", Date,)
+    carsourcetype = Column("CarSourceType", String,)
+    contacterphonepicurl= Column("ContacterPhonePicURL", String,)
 
 class SellerInfo(Base):
     
     __tablename__ = 'SellerInfo'
   
     seqid = Column("SEQID", String, primary_key=True, default=gen_uuid)
-    sellertype = Column("SellerType", String,)
     sellername = Column("SellerName", String,)
     selleraddress = Column("SellerAddress", String,)
     sellerphone = Column("SellerPhone", String,)

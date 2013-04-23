@@ -17,5 +17,5 @@ db_connect_str = u'mysql+mysqldb://%s:%s@%s:%s/%s?charset=%s' % (dbconfig[FetchC
                                                             dbconfig[FetchConst.DBConfig_dbname],
                                                             dbconfig[FetchConst.DBConfig_charactset],
                                                             )
-engine = create_engine(db_connect_str, echo=True)
+engine = create_engine(db_connect_str, echo=False)
 FetchSession = sessionmaker(bind=engine)

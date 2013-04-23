@@ -14,7 +14,6 @@ from scrapy.selector import HtmlXPathSelector
 from uuid import uuid4
 import datetime
 import os
-from crawler.shc.fe.const import FEConstant
 
 def ignore_notice(parse):
     
@@ -219,7 +218,8 @@ def list_page_parse_4_remove_duplicate_detail_page_request(parse):
 def detail_page_parse_4_save_2_db(parse):
     
     def stuff_ci(ci, sellerinfo, current_city):
-        ci.statustype = u'1' if sellerinfo.get(SHCFEShopInfoConstant.contacter_url) is not None else '2' 
+        contacter_url = sellerinfo.get(SHCFEShopInfoConstant.contacter_url)
+        ci.statustype = u'2' if contacter_url is None else '1' 
         ci.title = sellerinfo.get(SHCFEShopInfoConstant.title)
         ci.declaredate = sellerinfo.get(SHCFEShopInfoConstant.declaretime)
         ci.fetchdatetime = datetime.datetime.now()
@@ -227,7 +227,7 @@ def detail_page_parse_4_save_2_db(parse):
         ci.price = sellerinfo.get(SHCFEShopInfoConstant.price)
         ci.cartype = sellerinfo.get(SHCFEShopInfoConstant.cartype)
         ci.contacter = sellerinfo.get(SHCFEShopInfoConstant.contacter)
-        ci.contacterurl = sellerinfo.get(SHCFEShopInfoConstant.contacter_url)
+        ci.contacterurl = contacter_url
         ci.contacterphonepicname = sellerinfo.get(SHCFEShopInfoConstant.contacter_phone_picture_name)
         ci.carcolor = sellerinfo.get(SHCFEShopInfoConstant.car_color)
         ci.roadhaul = sellerinfo.get(SHCFEShopInfoConstant.road_haul)
@@ -236,13 +236,15 @@ def detail_page_parse_4_save_2_db(parse):
         ci.licenseddate = sellerinfo.get(SHCFEShopInfoConstant.license_date)
         ci.sourceurl = sellerinfo.get(SHCFEShopInfoConstant.info_url)
         ci.cityname = current_city
+        carsourcetype = sellerinfo.get(SHCFEShopInfoConstant.custom_flag)
+        ci.carsourcetype = carsourcetype
+        ci.contacterphonepicurl = sellerinfo.get(SHCFEShopInfoConstant.contacter_phone_url)
         ci.sourcetype = u'58'
         
     @wraps(parse)
     def parse_simulate(self, response):
         rss = parse(self, response)
         from crawler.shc.fe.spiders import PersonPhoneSpider, CustomerShopSpider
-
         if rss:
             for rs in rss:
                 fs = FetchSession()
@@ -274,8 +276,8 @@ def detail_page_parse_4_save_2_db(parse):
                             si.sellername = rs.get(SHCFEShopInfoConstant.shop_name)
                             si.sellerphone = rs.get(SHCFEShopInfoConstant.shop_phone)
                             si.sellerurl = contacter_url
+                            
                             si.enterdate = rs.get(SHCFEShopInfoConstant.enter_time)
-                            si.sellertype = rs.get(SHCFEShopInfoConstant.custom_flag)
                             fs.add(ci)
                             fs.add(si)
                         
@@ -312,8 +314,8 @@ def seller_page_parse_4_save_2_db(parse):
         si.selleraddress = rs.get(SHCFEShopInfoConstant.shop_address)
         si.sellername = rs.get(SHCFEShopInfoConstant.shop_name)
         si.sellerphone = rs.get(SHCFEShopInfoConstant.shop_phone)
+        si.enterdate = rs.get(SHCFEShopInfoConstant.enter_time)
         
-    
     @wraps(parse)
     def parse_simulate(self, response):
         rss = parse(self, response)
