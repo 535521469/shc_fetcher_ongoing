@@ -33,7 +33,12 @@ class SHCFEShopInfoConstant(object):
     shop_phone = u"shop_phone"
     enter_time = u"enter_time"
     info_url = u"info_url"
+    
+    sellerid = u'sellerid'
+    carid = u'carid'
 
+    custom_flag = u'customflag'
+    
 class SHCFEShopInfo(dict):
     '''商户信息
     '''
@@ -63,6 +68,9 @@ class SHCFEShopInfo(dict):
     
     info_url = Field()
     
+    customflag = Field()
+    carid = Field()
+    sellerid = Field()
 
     
 #class SHCFEShopInfo(UserDict):

@@ -4,7 +4,6 @@ Created on 2013-3-31
 @author: Administrator
 '''
 from bot.config import configdata
-from bot.configutil import ConfigFile
 from crawler.shc.fe.const import FEConstant as const
 from multiprocessing import Lock
 from multiprocessing.process import Process

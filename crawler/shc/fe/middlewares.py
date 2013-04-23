@@ -19,7 +19,7 @@ class ProxyRetryMiddleWare(RetryMiddleware):
                 next_proxy = spider.get_next_proxy(request.cookies)
             except Exception:
                 msg = (u'there is no proxy list in cookies %s ,please check')
-                self.log(msg, log.WARNING)
+                spider.log(msg, log.WARNING)
                 return RetryMiddleware._retry(self, request, reason, spider)
             if proxy:
                 msg = (u'proxy %s fail, use %s for the %srd time '

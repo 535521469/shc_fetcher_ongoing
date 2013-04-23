@@ -35,3 +35,6 @@ class FEConstant(FetchConstant):
     
     sellerinfo = u'customer_info'
     
+    CARID = u'carid'
+    SELLERID = u'sellerid'
+    

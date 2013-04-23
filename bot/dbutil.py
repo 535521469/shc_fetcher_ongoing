@@ -7,9 +7,8 @@ from bot.config import configdata
 from const import FetchConst
 from sqlalchemy import create_engine
 from sqlalchemy.orm.session import sessionmaker
-from bot.item import CarInfo
 
-dbconfig = configdata[u'db']
+dbconfig = configdata[FetchConst.DBConfig]
 # mysql://root:@localhost:3306/test
 db_connect_str = u'mysql+mysqldb://%s:%s@%s:%s/%s?charset=%s' % (dbconfig[FetchConst.DBConfig_user],
                                                             dbconfig[FetchConst.DBConfig_passwd],
@@ -18,7 +17,5 @@ db_connect_str = u'mysql+mysqldb://%s:%s@%s:%s/%s?charset=%s' % (dbconfig[FetchC
                                                             dbconfig[FetchConst.DBConfig_dbname],
                                                             dbconfig[FetchConst.DBConfig_charactset],
                                                             )
-# 'mysql+mysqldb://scott:tiger@localhost/foo'
-engine = create_engine(db_connect_str, echo=False)
+engine = create_engine(db_connect_str, echo=True)
 FetchSession = sessionmaker(bind=engine)
-

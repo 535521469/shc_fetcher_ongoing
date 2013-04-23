@@ -3,7 +3,6 @@
 Created on 2013-3-20
 @author: corleone
 '''
-from bot.configutil import ConfigFile
 from crawler.shc.fe.const import FEConstant as const
 from multiprocessing import Process, Lock
 from sched import scheduler
@@ -25,7 +24,6 @@ class SpiderProcess(Process):
         self.starttime = starttime.strftime('%Y%m%d%H%M%S')
         self.city_name = city_name
         self.configdata = dict(configdata)
-        
         self.configdata[const.CURRENT_CITY] = city_name
     
     def unite_proxy(self, configdata):

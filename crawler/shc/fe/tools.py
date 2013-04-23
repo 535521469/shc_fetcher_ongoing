@@ -185,7 +185,7 @@ def with_ip_proxy(parse):
     return parse_simulate
         
 
-def check_detail_duplicate(parse):
+def list_page_parse_4_remove_duplicate_detail_page_request(parse):
     
     @wraps(parse)
     def parse_simulate(self, response):
@@ -193,87 +193,142 @@ def check_detail_duplicate(parse):
         from crawler.shc.fe.spiders import CarDetailSpider, CarListSpider
         if rss:
             for rs in rss:
-                if rs.callback.im_class == CarDetailSpider:
-                    if isinstance(rs, Request):
+                if isinstance(rs, Request):
+                    # detail spider
+                    if rs.callback.im_class == CarDetailSpider:
                         fs = FetchSession()
                         try:
-                            if fs.query(CarInfo).filter(CarInfo.sourceurl == rs.url).all():
-                                self.log(u'give up fetched url %s' % rs.url, log.INFO)
+                            ci = fs.query(CarInfo).filter(CarInfo.sourceurl == rs.url).first() 
+                            if ci:
+                                self.log(u'give up fetched detail page %s %s '
+                                         '%s' % (rs.url, ci.cityname, ci.seqid),
+                                         log.INFO)
                             else:
-                                ci = CarInfo()
-                                ci.sourceurl = rs.url
-                                ci.sourcetype = u'58'
-                                ci.cityname = self.get_current_city(rs.cookies)
-                                fs.add(ci)
-                                fs.commit()
                                 yield rs
                         except Exception as e:
                             self.log(u'something wrong %s' % str(e), log.CRITICAL)
                         finally:
                             fs.close()
-                elif rs.callback.im_class == CarListSpider:
-                    yield rs
+                    elif rs.callback.im_class == CarListSpider:
+                        # next page spider
+                        yield rs
                     
     return parse_simulate
 
-def save_detail(parse):
+
+def detail_page_parse_4_save_2_db(parse):
     
+    def stuff_ci(ci, sellerinfo, current_city):
+        ci.statustype = u'1' if sellerinfo.get(SHCFEShopInfoConstant.contacter_url) is not None else '2' 
+        ci.title = sellerinfo.get(SHCFEShopInfoConstant.title)
+        ci.declaredate = sellerinfo.get(SHCFEShopInfoConstant.declaretime)
+        ci.fetchdatetime = datetime.datetime.now()
+        ci.lastactivedatetime = datetime.datetime.now()
+        ci.price = sellerinfo.get(SHCFEShopInfoConstant.price)
+        ci.cartype = sellerinfo.get(SHCFEShopInfoConstant.cartype)
+        ci.contacter = sellerinfo.get(SHCFEShopInfoConstant.contacter)
+        ci.contacterurl = sellerinfo.get(SHCFEShopInfoConstant.contacter_url)
+        ci.contacterphonepicname = sellerinfo.get(SHCFEShopInfoConstant.contacter_phone_picture_name)
+        ci.carcolor = sellerinfo.get(SHCFEShopInfoConstant.car_color)
+        ci.roadhaul = sellerinfo.get(SHCFEShopInfoConstant.road_haul)
+        ci.displacement = sellerinfo.get(SHCFEShopInfoConstant.displacement)
+        ci.gearbox = sellerinfo.get(SHCFEShopInfoConstant.gearbox)
+        ci.licenseddate = sellerinfo.get(SHCFEShopInfoConstant.license_date)
+        ci.sourceurl = sellerinfo.get(SHCFEShopInfoConstant.info_url)
+        ci.cityname = current_city
+        ci.sourcetype = u'58'
+        
     @wraps(parse)
     def parse_simulate(self, response):
         rss = parse(self, response)
         from crawler.shc.fe.spiders import PersonPhoneSpider, CustomerShopSpider
+
         if rss:
             for rs in rss:
                 fs = FetchSession()
                 try:
-                    if isinstance(rs, Request):
-                        cookies = rs.cookies
-                        sellerinfo = cookies[FEConstant.sellerinfo]
-                        sourceurl = sellerinfo.get(SHCFEShopInfoConstant.info_url)
+                    if not isinstance(rs, Request):
+
+                        sourceurl = rs.get(SHCFEShopInfoConstant.info_url)
                         ci = fs.query(CarInfo).filter(CarInfo.sourceurl == sourceurl).first()
                         if ci is not None:
-                            ci.statustype = 1
-                            ci.title = sellerinfo.get(SHCFEShopInfoConstant.title)
-                            ci.declaredate = sellerinfo.get(SHCFEShopInfoConstant.declaretime)
-                            ci.fetchdatetime = datetime.datetime.now()
-                            ci.lastactivedatetime = datetime.datetime.now()
-                            
-                            ci.price = sellerinfo.get(SHCFEShopInfoConstant.price)
-                            ci.cartype = sellerinfo.get(SHCFEShopInfoConstant.cartype)
-                            ci.contacter = sellerinfo.get(SHCFEShopInfoConstant.contacter)
-                            ci.contacterurl = sellerinfo.get(SHCFEShopInfoConstant.contacter_url)
-                            ci.contacterphonepicname = sellerinfo.get(SHCFEShopInfoConstant.contacter_phone_picture_name)
-                            ci.carcolor = sellerinfo.get(SHCFEShopInfoConstant.car_color)
-                            ci.roadhaul = sellerinfo.get(SHCFEShopInfoConstant.road_haul)
-                            ci.displacement = sellerinfo.get(SHCFEShopInfoConstant.displacement)
-                            ci.gearbox = sellerinfo.get(SHCFEShopInfoConstant.gearbox)
-                            ci.licenseddate = sellerinfo.get(SHCFEShopInfoConstant.license_date)
-    
-                        si = fs.query(SellerInfo).filter(SellerInfo.sellerurl == sellerinfo[SHCFEShopInfoConstant.contacter_url]).first()
+                            #===================================================
+                            # already exists
+                            #===================================================
+                            self.log(u'parse detail page,detail url already exists ', log.CRITICAL)
+                        else:
+                            ci = CarInfo()
+                            stuff_ci(ci, rs, rs.get(SHCFEShopInfoConstant.cityname))
+                        contacter_url = rs.get(SHCFEShopInfoConstant.contacter_url)
+                        si = fs.query(SellerInfo).filter(SellerInfo.sellerurl == contacter_url).first()
                         if si is not None:
                             ci.sellerid = si.seqid
-                            fs.commit()
+                            self.log(u"give up to crawl exist seller info "
+                                     "%s %s %s" % (ci.cityname, contacter_url, si.seqid),
+                                     log.INFO)
                         else:
                             ci.sellerid = gen_uuid()
                             si = SellerInfo()
                             si.seqid = ci.sellerid
-                            si.selleraddress = sellerinfo.get(SHCFEShopInfoConstant.shop_address)
-                            si.sellername = sellerinfo.get(SHCFEShopInfoConstant.shop_name)
-                            si.sellerphone = sellerinfo.get(SHCFEShopInfoConstant.shop_phone)
-                            si.sellerurl = sellerinfo.get(SHCFEShopInfoConstant.contacter_url)
-                            si.enterdate = sellerinfo.get(SHCFEShopInfoConstant.enter_time)
-                            si.sellertype = u'1' if self.is_customer(cookies) else u'2'
+                            si.selleraddress = rs.get(SHCFEShopInfoConstant.shop_address)
+                            si.sellername = rs.get(SHCFEShopInfoConstant.shop_name)
+                            si.sellerphone = rs.get(SHCFEShopInfoConstant.shop_phone)
+                            si.sellerurl = contacter_url
+                            si.enterdate = rs.get(SHCFEShopInfoConstant.enter_time)
+                            si.sellertype = rs.get(SHCFEShopInfoConstant.custom_flag)
+                            fs.add(ci)
                             fs.add(si)
-                            fs.commit()
                         
-#                    if rs.callback.im_class == PersonPhoneSpider:
-#                        
-#                    elif rs.callback.im_class == CustomerShopSpider:
-#                        pass
+                            if contacter_url is not None:
+                                yield Request(contacter_url,
+                                              CustomerShopSpider().parse,
+                                              dont_filter=True,
+                                              cookies={
+                                                       SHCFEShopInfoConstant.contacter_url:ci.contacterurl,
+                                                       SHCFEShopInfoConstant.carid:ci.seqid,
+                                                       SHCFEShopInfoConstant.sellerid:si.seqid,
+                                                       },
+                                              )
+                        
+                        phone_url = rs.get(SHCFEShopInfoConstant.contacter_phone_url)
+                        if phone_url is not None:
+                            yield Request(phone_url, PersonPhoneSpider().parse,
+                                          cookies={
+                                                   SHCFEShopInfoConstant.contacter_phone_picture_name:ci.contacterphonepicname,
+                                                   SHCFEShopInfoConstant.carid:ci.seqid,
+                                                   }, dont_filter=True)
                 except Exception as e:
                     self.log(u'something wrong %s' % str(e), log.CRITICAL)
+                    fs.rollback()
+                else:
+                    fs.commit()
                 finally:
                     fs.close()
-                    
-                    
+    return parse_simulate
+
+def seller_page_parse_4_save_2_db(parse):
+    
+    def stuff_si(si, rs):
+        si.selleraddress = rs.get(SHCFEShopInfoConstant.shop_address)
+        si.sellername = rs.get(SHCFEShopInfoConstant.shop_name)
+        si.sellerphone = rs.get(SHCFEShopInfoConstant.shop_phone)
+        
+    
+    @wraps(parse)
+    def parse_simulate(self, response):
+        rss = parse(self, response)
+        if rss:
+            for rs in rss:
+                fs = FetchSession()
+                try:
+                    if not isinstance(rs, Request):
+                        si = fs.query(SellerInfo).filter(SellerInfo.seqid == rs.get(SHCFEShopInfoConstant.sellerid)).first()
+                        if si is not None:
+                            stuff_si(si, rs)
+                except Exception as e:
+                    self.log(u'something wrong %s' % str(e), log.CRITICAL)
+                else:
+                    fs.commit()
+                finally:
+                    fs.close()
     return parse_simulate

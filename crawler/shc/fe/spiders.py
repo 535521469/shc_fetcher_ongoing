@@ -5,9 +5,9 @@ Created on 2013-3-31
 '''
 from crawler.shc.fe.const import FEConstant as const
 from crawler.shc.fe.item import SHCFEShopInfo, SHCFEShopInfoConstant as voconst
-from crawler.shc.fe.tools import ignore_notice, check_verification_code, \
-    check_verification_code_gif, with_ip_proxy, check_blank_page, \
-    check_detail_duplicate, save_detail
+from crawler.shc.fe.tools import check_blank_page, detail_page_parse_4_save_2_db, \
+    list_page_parse_4_remove_duplicate_detail_page_request, \
+    seller_page_parse_4_save_2_db
 from scrapy import log
 from scrapy.http.request import Request
 from scrapy.selector import HtmlXPathSelector
@@ -249,7 +249,13 @@ class FESpider(BaseSpider):
             os.makedirs(pic_dir)
         
         return pic_dir
-
+    
+    def build_public_pic_dir(self, cookies):
+        city = self.get_current_city(cookies)
+        pic_dir = os.sep.join([cookies[const.OUTPUT_DIR], u'%sPIC' % city])
+        if not os.path.exists(pic_dir):
+            os.makedirs(pic_dir)
+    
     def build_file_name(self, cookies):
         if self.is_customer(cookies):
             return 'total%scustomer' % cookies[const.START_TIME]
@@ -260,35 +266,6 @@ class FESpider(BaseSpider):
         return os.sep.join([self.build_file_dir(cookies)
                            , self.build_file_name(cookies) + u'.csv'])
     
-    def write_header(self, cookies):
-        file_path = self.build_file_path(cookies)
-        if not os.path.exists(file_path):
-            lock = cookies[const.LOCK]
-            with lock:
-                with open(file_path, u'w') as f:
-                    if self.is_customer(cookies):
-                        dw = csv.DictWriter(f, customer_fields)
-                        dw.writerow(get_customer_headers())
-                    else :
-                        dw = csv.DictWriter(f, personal_fields)
-                        dw.writerow(get_personal_headers())
-                    self.log(u'create file succeed %s' % file_path, log.INFO)
-    
-    def write_data(self, cookies, info):
-        lock = cookies[const.LOCK]
-        if self.is_customer(cookies):
-            with lock:
-                file_path = self.build_file_path(cookies)
-                with open(file_path, u'a') as f:
-                    dw = csv.DictWriter(f, customer_fields)
-                    dw.writerow(info)
-        else:
-            with lock:
-                file_path = self.build_file_path(cookies)
-                with open(file_path, u'a') as f:
-                    dw = csv.DictWriter(f, personal_fields)
-                    dw.writerow(info)
-            
     
     def is_customer(self, cookies):
         return unicode(cookies[const.CUSTOMER_FLAG]) == u"1"
@@ -314,8 +291,6 @@ class SHCSpider(FESpider):
                       cookies[const.START_PAGE],
                       cookies[const.END_PAGE],
                      )
-        
-        self.write_header(cookies)
         
         self.log(msg, log.INFO)
         
@@ -345,14 +320,7 @@ class SHCSpider(FESpider):
         
 class CarListSpider(FESpider):
     
-    DOWNLOAD_DELAY = 20
-    
-#    @check_blank_page
-#    @with_ip_proxy
-#    @check_verification_code
-#    @ignore_notice
-
-    @check_detail_duplicate
+    @list_page_parse_4_remove_duplicate_detail_page_request
     def parse(self, response):
         hxs = HtmlXPathSelector(response)
         
@@ -397,31 +365,6 @@ class CarListSpider(FESpider):
                 continue
             
             url = tr_tag.select('td[1]/a/@href').extract()[0]
-            #===================================================================
-            # declare_date = None
-            # try:
-            #    declare_date = tr_tag.select('//span[@class="c_999"]/text()').extract()[0]
-            # except IndexError:
-            #    pass
-            # url_title = tr_tag.select('td[1]/a/text()').extract()[0]
-            # if declare_date:
-            #    declare_date_str = u'%s-%s' % (cookies[const.START_TIME][:4]
-            #                                   , declare_date)
-            #    try:
-            #        declare_date = strptime(declare_date_str, '%Y-%m-%d').date()
-            #        
-            #        if not self.in_time_period(declare_date, cookies):
-            #            msg = (u"ignore for out of time %s,%s,%s in "
-            #                   "%s ") % (current_city, declare_date_str
-            #                             , url, response.url)
-            #            self.log(msg, log.INFO)
-            #            continue 
-            #    except ValueError:
-            #        #===========================================================
-            #        # not standar datetime format
-            #        #===========================================================
-            #        self.log(u'%s ' % declare_date_str, log.DEBUG)
-            #===================================================================
             
             url_len = url_len + 1
             self.log((u'add detail page in list page %s '
@@ -466,14 +409,10 @@ class CarListSpider(FESpider):
                 
 class CarDetailSpider(FESpider):
     
-    DOWNLOAD_DELAY = 5
+    name = u'CarDetailSpider'
+    DOWNLOAD_DELAY = 10
     
-#    @check_blank_page
-#    @with_ip_proxy
-#    @check_verification_code
-#    @ignore_notice
-
-    @save_detail
+    @detail_page_parse_4_save_2_db
     def parse(self, response):
         '''
         parse 
@@ -488,207 +427,155 @@ class CarDetailSpider(FESpider):
         city_name = city_[:city_.find(u'58')]
         info[voconst.cityname] = city_name
         
-        continue_flag = 1
+        try:
+            custom_flag = hxs.select('//em[@class="shenfen"]/text()').extract()[0].strip().replace(u"）", u'').replace(u"（", u'')
+            info[voconst.custom_flag] = u'1' if custom_flag.find(u'\u5546\u5bb6') != -1 else u'2'
+        except Exception as e:
+            info[voconst.custom_flag] = u'1' if self.is_customer(cookies) else u'2'
         
         try:
             declaretime = hxs.select('//li[@class="time"]/text()').extract()[0]
             info[voconst.declaretime] = declaretime
             
         except Exception as e:
-            self.log((u" something wrong %s " % (response.url,)), log.CRITICAL)
+            self.log((u"something wrong %s " % (response.url,)), log.CRITICAL)
             raise e
         
-        if not self.in_time_period(strptime(declaretime, '%Y.%m.%d').date()
-                                   , cookies):
-            continue_flag = 0
-
-            if self.is_develop_debug(cookies):
-                file_name = self.get_random_id() + u'.html'
-                self.save_body(self.build_deprecate_file_dir(cookies),
-                           file_name, response)
-                msg = u'not in time period %s , %s ' % (declaretime, file_name)
-            else:
-                msg = u'not in time period %s ' % (declaretime)
-            
-        else:
-            xps = '//span[@id="t_phone"]/script/text()'
-            phone_picture_url = hxs.select(xps).extract()
-            if not phone_picture_url:
-                continue_flag = 0
-                if self.is_develop_debug(cookies):
-                    file_name = self.get_random_id() + u'.html'
-                    self.save_body(self.build_contacter_miss_file_dir(cookies),
-                               file_name, response)
-                    msg = u'contacter\'s phone picture is miss %s ' % file_name
-                else:
-                    msg = u'contacter\'s phone picture is miss '
+        xps = '//span[@id="t_phone"]/script/text()'
+        phone_picture_url = hxs.select(xps).extract()
                     
-                
-        if continue_flag:
-            try:
-                phone_picture_url = phone_picture_url[0]
-                phone_picture_url = phone_picture_url.split('\'')[1]
-                
-                xps = '//div[@class="col_sub mainTitle"]/h1/text()'
-                title = hxs.select(xps).extract()[0]
-                info[voconst.title] = title
-                        
-            except Exception as e:
-                self.log((u"something wrong %s " % (response.url,)),
-                                    log.CRITICAL)
-                raise e
+        try:
+            phone_picture_url = phone_picture_url[0]
+            phone_picture_url = phone_picture_url.split('\'')[1]
             
-            xps = '//div[@class="col_sub sumary"]/ul[@class="suUl"]/li'
-            li_tags = hxs.select(xps)
-            for idx, li_tag in enumerate(li_tags):
-                try:
-                    blank = li_tag.select('child::*')
-                    if blank:
-                        div_val = li_tag.select('div[1]/text()').extract()
-                        div_val = div_val[0].strip()
-                except IndexError as ie:
-                    self.log((u" something wrong %s , index %s"
-                             " of %s" % (response.url, idx, xps)), log.CRITICAL)
-                    raise ie
-                
-                title_div_tag_val = div_val.replace(u'：', u'')
-                if title_div_tag_val == u'价    格':
-                    price_num = li_tag.select('div[2]/span/text()').extract()[0]
-                    price_unit = li_tag.select('div[2]/text()').extract()[0]
-                    info[voconst.price] = price_num + price_unit
-                elif title_div_tag_val == u'联 系 人':
-                    try:
-                        contacter = li_tag.select('div[2]/a/text()').extract()[0]
-                        contacter_url = li_tag.select('div[2]/a/@href').extract()[0]
-                    except IndexError:
-                        contacter = li_tag.select('div[2]/span/a/text()').extract()[0]
-                        contacter_url = li_tag.select('div[2]/span/a/@href').extract()[0]
-                    info[voconst.contacter] = contacter.strip()
-                    info[voconst.contacter_url] = contacter_url
+            xps = '//div[@class="col_sub mainTitle"]/h1/text()'
+            title = hxs.select(xps).extract()[0]
+            info[voconst.title] = title
                     
-                elif title_div_tag_val in (u"品牌车系", u"车型名称"):
-                    xps = u'descendant-or-self::text()'
-                    a_vals = li_tag.select('div[2]').select(xps).extract()
-                    cartype = u''.join(a_vals).strip().replace(u'\n', u'')
-                    info[voconst.cartype] = cartype
-                
-            li_tags = hxs.select('//ul[@class="ulDec clearfix"]/li')
-            
-            for label_tag in li_tags:
-                xps = 'span[@class="it_l fb"]/text()'
-                label = label_tag.select(xps).extract()[0].strip().replace(' ', '')
-                label = label.replace(u'\xa0', u'')
-                if label == u'车辆颜色':
-                    car_color = label_tag.select('span[2]/text()').extract()[0]
-                    info[voconst.car_color] = car_color
-                elif label == u'\u53d8\u901f\u7bb1': # 变  速  箱
-                    gearbox = label_tag.select('span[2]/text()').extract()[0]
-                    info[voconst.gearbox] = gearbox
-                elif label == u'上牌时间':
-                    license_date = label_tag.select('span[2]/text()').extract()[0]
-                    info[voconst.license_date] = license_date
-                elif label == u'车辆排量':
-                    displacement = label_tag.select('span[2]/text()').extract()[0]
-                    info[voconst.displacement] = displacement
-                elif label == u'行驶里程':
-                    road_haul = label_tag.select('span[2]/text()').extract()[0]
-                    info[voconst.road_haul] = road_haul
-            
-            try:
-                info_url = response.url
-                info[voconst.info_url] = info_url 
-                picture_name = info_url.split(u'/')[-1]
-                picture_name = picture_name[:picture_name.index(u'.')]
-                info[voconst.contacter_phone_picture_name] = picture_name + u".jpg"
-                
-                cookies[const.sellerinfo] = info
-            except Exception as e:
-                self.log((u" something wrong %s " % (response.url,)),
-                                log.CRITICAL)
-                raise e
-            
-            contacter_url = info.get(voconst.contacter_url)
-            
-            if self.is_develop_debug(cookies):
-                self.save_body(self.build_detail_file_dir(cookies),
-                               picture_name + u'.html', response)
-            
-            if contacter_url is None :
-                self.log((u'with no contacter info %s , %s , '
-                          '%s') % (self.get_current_city(cookies),
-                                   response.request.url,
-                                   phone_picture_url), log.INFO)
-                
-                yield Request(phone_picture_url,
-                              PersonPhoneSpider().parse,
-                              cookies=cookies,
-                              dont_filter=True)
-            else:
-                cookies[voconst.contacter_phone_url] = phone_picture_url
-                self.log((u'with contacter info %s ,%s,'
-                          '%s') % (self.get_current_city(cookies),
-                                   response.request.url,
-                                   contacter_url), log.INFO)
-                
-#                contacter_url = u'http://my.58.com/13463298588423/'
-                yield Request(contacter_url,
-                              CustomerShopSpider().parse,
-                              cookies=cookies,
-                              dont_filter=True)
-            
-        else:
-            self.log((u"ignore in detail page %s %s %s") 
-                     % (self.get_current_city(cookies), msg, response.url),
+        except Exception as e:
+            self.log((u"info deprecated %s " % (response.url,)),
                      log.INFO)
+            phone_picture_url = None
         
+        xps = '//div[@class="col_sub sumary"]/ul[@class="suUl"]/li'
+        li_tags = hxs.select(xps)
+        for idx, li_tag in enumerate(li_tags):
+            try:
+                blank = li_tag.select('child::*')
+                if blank:
+                    div_val = li_tag.select('div[1]/text()').extract()
+                    div_val = div_val[0].strip()
+            except IndexError as ie:
+                self.log((u"something wrong %s , index %s"
+                         " of %s" % (response.url, idx, xps)), log.CRITICAL)
+                raise ie
+            
+            title_div_tag_val = div_val.replace(u'：', u'')
+            if title_div_tag_val == u'价    格':
+                price_num = li_tag.select('div[2]/span/text()').extract()[0]
+                price_unit = li_tag.select('div[2]/text()').extract()[0]
+                info[voconst.price] = price_num + price_unit
+            elif title_div_tag_val == u'联 系 人':
+                try:
+                    contacter = li_tag.select('div[2]/a/text()').extract()[0]
+                    contacter_url = li_tag.select('div[2]/a/@href').extract()[0]
+                except IndexError:
+                    contacter = li_tag.select('div[2]/span/a/text()').extract()[0]
+                    contacter_url = li_tag.select('div[2]/span/a/@href').extract()[0]
+                info[voconst.contacter] = contacter.strip()
+                info[voconst.contacter_url] = contacter_url
+                
+            elif title_div_tag_val in (u"品牌车系", u"车型名称"):
+                xps = u'descendant-or-self::text()'
+                a_vals = li_tag.select('div[2]').select(xps).extract()
+                cartype = u''.join(a_vals).strip().replace(u'\n', u'')
+                info[voconst.cartype] = cartype
+            
+        li_tags = hxs.select('//ul[@class="ulDec clearfix"]/li')
+        
+        for label_tag in li_tags:
+            xps = 'span[@class="it_l fb"]/text()'
+            label = label_tag.select(xps).extract()[0].strip().replace(' ', '')
+            label = label.replace(u'\xa0', u'')
+            if label == u'车辆颜色':
+                car_color = label_tag.select('span[2]/text()').extract()[0]
+                info[voconst.car_color] = car_color
+            elif label == u'\u53d8\u901f\u7bb1': # 变  速  箱
+                gearbox = label_tag.select('span[2]/text()').extract()[0]
+                info[voconst.gearbox] = gearbox
+            elif label == u'上牌时间':
+                license_date = label_tag.select('span[2]/text()').extract()[0]
+                info[voconst.license_date] = license_date
+            elif label == u'车辆排量':
+                displacement = label_tag.select('span[2]/text()').extract()[0]
+                info[voconst.displacement] = displacement
+            elif label == u'行驶里程':
+                road_haul = label_tag.select('span[2]/text()').extract()[0]
+                info[voconst.road_haul] = road_haul
+        
+        try:
+            info_url = response.url
+            info[voconst.info_url] = info_url 
+            picture_name = info_url.split(u'/')[-1]
+            picture_name = picture_name[:picture_name.index(u'.')]
+            info[voconst.contacter_phone_picture_name] = picture_name + u".gif"
+            
+            cookies[const.sellerinfo] = info
+        except Exception as e:
+            self.log((u"something wrong %s " % (response.url,)),
+                            log.CRITICAL)
+            raise e
+        
+        contacter_url = info.get(voconst.contacter_url)
+        
+        cookies[voconst.contacter_phone_url] = phone_picture_url
+#        self.log((u'crawl one detail %s ,%s') % (self.get_current_city(cookies),
+#                           response.request.url,), log.INFO)
+        
+        yield info
+        
+#        yield Request(contacter_url,
+#                      CustomerShopSpider().parse,
+#                      cookies=cookies,
+#                      dont_filter=True)
         
 class PersonPhoneSpider(FESpider):
 
 #    DOWNLOAD_DELAY = 0.3
     
-    @check_blank_page
-    @with_ip_proxy
-    @check_verification_code_gif
     def parse(self, response):
+        
+        def build_public_pic_dir(self, cityname,):
+            pic_dir = os.sep.join([os.getcwd(), u'%sPIC' % cityname])
+            if not os.path.exists(pic_dir):
+                os.makedirs(pic_dir)
+        
         cookies = response.request.cookies
-        info = cookies[const.sellerinfo]
+#        {SHCFEShopInfoConstant.cityname:ci.cityname,
+#                                                   SHCFEShopInfoConstant.contacter_phone_picture_name:ci.contacterphonepicname,
+#                                                   SHCFEShopInfoConstant.carid:ci.seqid,
+#                                                   }
         
-        filename = info[voconst.contacter_phone_picture_name]
+        pic_path = os.sep.join([self.build_public_pic_dir(cookies[voconst.cityname]), cookies[voconst.contacter_phone_picture_name]])
         
-        pic_path = os.sep.join([self.build_pic_dir(cookies), filename]) 
-        
+        print pic_path
         with open(pic_path , 'wb') as f:
             f.write(response.body)
         
-#        info[voconst.contacter_phone_picture_name] = filename
-        
-        self.write_data(cookies, info)
-        
-        self.log(u"fetch 1 %s , %s" % (info[voconst.cityname],
-                                       info[voconst.info_url]), log.INFO)
-        
-        
 class CustomerShopSpider(FESpider):
     
-    @check_blank_page
-    @with_ip_proxy
-    @check_verification_code
+#    @check_blank_page
+#    @with_ip_proxy
+#    @check_verification_code
+
+    @seller_page_parse_4_save_2_db
     def parse(self, response):
         
         hxs = HtmlXPathSelector(response)
         
         cookies = response.request.cookies
         
-        
-        if self.is_develop_debug(cookies):
-            custom_url = self.get_random_id() + u'.html'
-            self.save_body(self.build_custom_file_dir(cookies),
-                           custom_url + u'.html', response)
-            self.log(u"custom %s in custom folder %s " % (response.url,
-                                                          custom_url,),
-                     log.DEBUG)
-        
-        info = dict(cookies[const.sellerinfo])
+        info = dict(cookies)
         
         try:
             shop_name = hxs.select('//div[@class="bi_tit"]/text()').extract()[0]
@@ -728,10 +615,9 @@ class CustomerShopSpider(FESpider):
                     info[voconst.enter_time] = tr_tag.select('td[1]/text()').extract()[0].strip()
                     break
 
-        cookies[const.sellerinfo] = info
-        yield Request(response.request.cookies[voconst.contacter_phone_url],
-                      PersonPhoneSpider().parse,
-                      dont_filter=True,
-                      cookies=cookies)
+        yield info
+#        yield Request(response.request.cookies[voconst.contacter_phone_url],
+#                      PersonPhoneSpider().parse,
+#                      dont_filter=True,
+#                      cookies=cookies)
         
-        response.request
