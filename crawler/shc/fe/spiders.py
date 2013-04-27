@@ -5,7 +5,7 @@ Created on 2013-3-31
 '''
 from crawler.shc.fe.const import FEConstant as const
 from crawler.shc.fe.item import SHCFEShopInfo, SHCFEShopInfoConstant as voconst
-from crawler.shc.fe.tools import check_blank_page, detail_page_parse_4_save_2_db, \
+from crawler.shc.fe.tools import detail_page_parse_4_save_2_db, \
     list_page_parse_4_remove_duplicate_detail_page_request, \
     seller_page_parse_4_save_2_db
 from scrapy import log
@@ -356,19 +356,11 @@ class CarDetailSpider(FESpider):
             self.log((u"something wrong %s " % (response.url,)),
                             log.CRITICAL)
             raise e
-        
         contacter_url = info.get(voconst.contacter_url)
-        
         info[voconst.contacter_phone_url] = phone_picture_url
-#        self.log((u'crawl one detail %s ,%s') % (self.get_current_city(cookies),
-#                           response.request.url,), log.INFO)
         
         yield info
         
-#        yield Request(contacter_url,
-#                      CustomerShopSpider().parse,
-#                      cookies=cookies,
-#                      dont_filter=True)
         
 class PersonPhoneSpider(FESpider):
 
@@ -382,10 +374,6 @@ class PersonPhoneSpider(FESpider):
             return pic_dir
             
         cookies = response.request.cookies
-#        {SHCFEShopInfoConstant.cityname:ci.cityname,
-#                                                   SHCFEShopInfoConstant.contacter_phone_picture_name:ci.contacterphonepicname,
-#                                                   SHCFEShopInfoConstant.carid:ci.seqid,
-#                                                   }
         
         pic_path = os.sep.join([build_public_pic_dir(), cookies[voconst.contacter_phone_picture_name]])
         
@@ -393,11 +381,6 @@ class PersonPhoneSpider(FESpider):
             f.write(response.body)
         
 class CustomerShopSpider(FESpider):
-    
-    
-#    @check_blank_page
-#    @with_ip_proxy
-#    @check_verification_code
 
     @seller_page_parse_4_save_2_db
     def parse(self, response):
@@ -447,8 +430,4 @@ class CustomerShopSpider(FESpider):
                     break
                 
         yield info
-#        yield Request(response.request.cookies[voconst.contacter_phone_url],
-#                      PersonPhoneSpider().parse,
-#                      dont_filter=True,
-#                      cookies=cookies)
         

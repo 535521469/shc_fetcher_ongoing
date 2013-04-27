@@ -1,8 +1,6 @@
 BOT_NAME = 'SHCSpider'
 SPIDER_MODULES = ['crawler.shc.fe.spiders', ]
-
-LOG_LEVEL = 'DEBUG'
-
+LOG_LEVEL = 'INFO'
 LOG_ENCODING = u'UTF-8'
 
 #RETRY_TIMES = 10

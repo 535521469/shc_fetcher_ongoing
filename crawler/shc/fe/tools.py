@@ -251,25 +251,37 @@ def detail_page_parse_4_save_2_db(parse):
                 try:
                     if not isinstance(rs, Request):
 
-                        sourceurl = rs.get(SHCFEShopInfoConstant.info_url)
-                        ci = fs.query(CarInfo).filter(CarInfo.sourceurl == sourceurl).first()
-                        if ci is not None:
-                            #===================================================
-                            # already exists
-                            #===================================================
-                            self.log(u'parse detail page,detail url already exists ', log.CRITICAL)
-                        else:
-                            ci = CarInfo()
-                            stuff_ci(ci, rs, rs.get(SHCFEShopInfoConstant.cityname))
                         contacter_url = rs.get(SHCFEShopInfoConstant.contacter_url)
                         si = fs.query(SellerInfo).filter(SellerInfo.sellerurl == contacter_url).first()
+                        sourceurl = rs.get(SHCFEShopInfoConstant.info_url)
+                        
                         if si is not None:
-                            ci.sellerid = si.seqid
+                            
+                            ci = fs.query(CarInfo).filter(CarInfo.sourceurl == sourceurl).first()
+                            if ci is not None:
+                                #===================================================
+                                # already exists
+                                #===================================================
+                                self.log(u'parse detail page,detail url already exists ', log.CRITICAL)
+                            else:
+                                ci = CarInfo()
+                                stuff_ci(ci, rs, rs.get(SHCFEShopInfoConstant.cityname))
+                                ci.sellerid = si.seqid
+                                fs.add(ci)
+                                
                             self.log(u"give up to crawl exist seller info "
                                      "%s %s %s" % (ci.cityname, contacter_url, si.seqid),
                                      log.INFO)
                         else:
-                            ci.sellerid = gen_uuid()
+                            ci = fs.query(CarInfo).filter(CarInfo.sourceurl == sourceurl).first()
+                            if ci is not None:
+                                self.log(u'parse detail page,detail url already exists ', log.CRITICAL)
+                            else:
+                                ci = CarInfo()
+                                ci.sellerid = gen_uuid()
+                                stuff_ci(ci, rs, rs.get(SHCFEShopInfoConstant.cityname))
+                                fs.add(ci)
+                            
                             si = SellerInfo()
                             si.seqid = ci.sellerid
                             si.selleraddress = rs.get(SHCFEShopInfoConstant.shop_address)
@@ -278,7 +290,6 @@ def detail_page_parse_4_save_2_db(parse):
                             si.sellerurl = contacter_url
                             
                             si.enterdate = rs.get(SHCFEShopInfoConstant.enter_time)
-                            fs.add(ci)
                             fs.add(si)
                         
                             if contacter_url is not None:
